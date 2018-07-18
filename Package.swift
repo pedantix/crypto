@@ -9,14 +9,15 @@ let package = Package(
     ],
     dependencies: [
         // 🌎 Utility package containing tools for byte manipulation, Codable, OS APIs, and debugging.
-        .package(url: "https://github.com/vapor/core.git", from: "3.0.0-rc.2"),
+        .package(url: "https://github.com/vapor/core.git", from: "3.0.0"),
 
         /// Bindings to OpenSSL-compatible libraries for TLS support in SwiftNIO
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "1.0.0"),
     ],
     targets: [
-        .target(name: "Crypto", dependencies: ["Async", "Bits", "Core", "COperatingSystem", "Debugging", "NIOOpenSSL", "Random"]),
+        .target(name: "Crypto", dependencies: ["Async", "Bits", "Core", "COperatingSystem", "Debugging", "libbcrypt", "NIOOpenSSL", "Random"]),
         .testTarget(name: "CryptoTests", dependencies: ["Crypto"]),
+        .target(name: "libbcrypt"),
         .target(name: "Random", dependencies: ["Bits"]),
         .testTarget(name: "RandomTests", dependencies: ["Random"]),
     ]

@@ -1,19 +1,124 @@
-extension BCrypt {
-    struct Key {
-        // bcrypt IV: "OrpheanBeholderScryDoubt"
-        static let ctext : [UInt32] = [
-            0x4f727068, 0x65616e42, 0x65686f6c, 0x64657253, 0x63727944, 0x6f756274
-        ]
-        
-        static let p: [UInt32] = [
-            0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344,
-            0xa4093822, 0x299f31d0, 0x082efa98, 0xec4e6c89,
-            0x452821e6, 0x38d01377, 0xbe5466cf, 0x34e90c6c,
-            0xc0ac29b7, 0xc97c50dd, 0x3f84d5b5, 0xb5470917,
-            0x9216d5d9, 0x8979fb1b
-        ]
-        
-        static let s: [UInt32] = [
+/*    $OpenBSD: blf.c,v 1.7 2007/11/26 09:28:34 martynas Exp $    */
+
+/*
+ * Blowfish block cipher for OpenBSD
+ * Copyright 1997 Niels Provos <provos@physnet.uni-hamburg.de>
+ * All rights reserved.
+ *
+ * Implementation advice by David Mazieres <dm@lcs.mit.edu>.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. All advertising materials mentioning features or use of this software
+ *    must display the following acknowledgement:
+ *      This product includes software developed by Niels Provos.
+ * 4. The name of the author may not be used to endorse or promote products
+ *    derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+/*
+ * This code is derived from section 14.3 and the given source
+ * in section V of Applied Cryptography, second edition.
+ * Blowfish is an unpatented fast block cipher designed by
+ * Bruce Schneier.
+ */
+
+#include <sys/types.h>
+
+#include "blf.h"
+
+#undef inline
+#ifdef __GNUC__
+#define inline __inline
+#else                /* !__GNUC__ */
+#define inline
+#endif                /* !__GNUC__ */
+
+/* Function for Feistel Networks */
+
+#define F(s, x) ((((s)[        (((x)>>24)&0xFF)]  \
++ (s)[0x100 + (((x)>>16)&0xFF)]) \
+^ (s)[0x200 + (((x)>> 8)&0xFF)]) \
++ (s)[0x300 + ( (x)     &0xFF)])
+
+#define BLFRND(s,p,i,j,n) (i ^= F(s,j) ^ (p)[n])
+
+void
+Blowfish_encipher(blf_ctx *c, u_int32_t *x)
+{
+    u_int32_t Xl;
+    u_int32_t Xr;
+    u_int32_t *s = c->S[0];
+    u_int32_t *p = c->P;
+
+    Xl = x[0];
+    Xr = x[1];
+
+    Xl ^= p[0];
+    BLFRND(s, p, Xr, Xl, 1); BLFRND(s, p, Xl, Xr, 2);
+    BLFRND(s, p, Xr, Xl, 3); BLFRND(s, p, Xl, Xr, 4);
+    BLFRND(s, p, Xr, Xl, 5); BLFRND(s, p, Xl, Xr, 6);
+    BLFRND(s, p, Xr, Xl, 7); BLFRND(s, p, Xl, Xr, 8);
+    BLFRND(s, p, Xr, Xl, 9); BLFRND(s, p, Xl, Xr, 10);
+    BLFRND(s, p, Xr, Xl, 11); BLFRND(s, p, Xl, Xr, 12);
+    BLFRND(s, p, Xr, Xl, 13); BLFRND(s, p, Xl, Xr, 14);
+    BLFRND(s, p, Xr, Xl, 15); BLFRND(s, p, Xl, Xr, 16);
+
+    x[0] = Xr ^ p[17];
+    x[1] = Xl;
+}
+
+void
+Blowfish_decipher(blf_ctx *c, u_int32_t *x)
+{
+    u_int32_t Xl;
+    u_int32_t Xr;
+    u_int32_t *s = c->S[0];
+    u_int32_t *p = c->P;
+
+    Xl = x[0];
+    Xr = x[1];
+
+    Xl ^= p[17];
+    BLFRND(s, p, Xr, Xl, 16); BLFRND(s, p, Xl, Xr, 15);
+    BLFRND(s, p, Xr, Xl, 14); BLFRND(s, p, Xl, Xr, 13);
+    BLFRND(s, p, Xr, Xl, 12); BLFRND(s, p, Xl, Xr, 11);
+    BLFRND(s, p, Xr, Xl, 10); BLFRND(s, p, Xl, Xr, 9);
+    BLFRND(s, p, Xr, Xl, 8); BLFRND(s, p, Xl, Xr, 7);
+    BLFRND(s, p, Xr, Xl, 6); BLFRND(s, p, Xl, Xr, 5);
+    BLFRND(s, p, Xr, Xl, 4); BLFRND(s, p, Xl, Xr, 3);
+    BLFRND(s, p, Xr, Xl, 2); BLFRND(s, p, Xl, Xr, 1);
+
+    x[0] = Xr ^ p[0];
+    x[1] = Xl;
+}
+
+void
+Blowfish_initstate(blf_ctx *c)
+{
+    /* P-box and S-box tables initialized with digits of Pi */
+
+    static const blf_ctx initstate =
+
+    { {
+        {
             0xd1310ba6, 0x98dfb5ac, 0x2ffd72db, 0xd01adfb7,
             0xb8e1afed, 0x6a267e96, 0xba7c9045, 0xf12c7f99,
             0x24a19947, 0xb3916cf7, 0x0801f2e2, 0x858efc16,
@@ -77,7 +182,8 @@ extension BCrypt {
             0xd60f573f, 0xbc9bc6e4, 0x2b60a476, 0x81e67400,
             0x08ba6fb5, 0x571be91f, 0xf296ec6b, 0x2a0dd915,
             0xb6636521, 0xe7b9f9b6, 0xff34052e, 0xc5855664,
-            0x53b02d5d, 0xa99f8fa1, 0x08ba4799, 0x6e85076a,
+            0x53b02d5d, 0xa99f8fa1, 0x08ba4799, 0x6e85076a},
+        {
             0x4b7a70e9, 0xb5b32944, 0xdb75092e, 0xc4192623,
             0xad6ea6b0, 0x49a7df7d, 0x9cee60b8, 0x8fedb266,
             0xecaa8c71, 0x699a17ff, 0x5664526c, 0xc2b19ee1,
@@ -141,7 +247,8 @@ extension BCrypt {
             0x9e447a2e, 0xc3453484, 0xfdd56705, 0x0e1e9ec9,
             0xdb73dbd3, 0x105588cd, 0x675fda79, 0xe3674340,
             0xc5c43465, 0x713e38d8, 0x3d28f89e, 0xf16dff20,
-            0x153e21e7, 0x8fb03d4a, 0xe6e39f2b, 0xdb83adf7,
+            0x153e21e7, 0x8fb03d4a, 0xe6e39f2b, 0xdb83adf7},
+        {
             0xe93d5a68, 0x948140f7, 0xf64c261c, 0x94692934,
             0x411520f7, 0x7602d4f7, 0xbcf46b2e, 0xd4a20068,
             0xd4082471, 0x3320f46a, 0x43b7d4b7, 0x500061af,
@@ -205,7 +312,8 @@ extension BCrypt {
             0xed545578, 0x08fca5b5, 0xd83d7cd3, 0x4dad0fc4,
             0x1e50ef5e, 0xb161e6f8, 0xa28514d9, 0x6c51133c,
             0x6fd5c7e7, 0x56e14ec4, 0x362abfce, 0xddc6c837,
-            0xd79a3234, 0x92638212, 0x670efa8e, 0x406000e0,
+            0xd79a3234, 0x92638212, 0x670efa8e, 0x406000e0},
+        {
             0x3a39ce37, 0xd3faf5cf, 0xabc27737, 0x5ac52d1b,
             0x5cb0679e, 0x4fa33742, 0xd3822740, 0x99bc9bbe,
             0xd5118e9d, 0xbf0f7315, 0xd62d1c7e, 0xc700c47b,
@@ -269,7 +377,281 @@ extension BCrypt {
             0x85cbfe4e, 0x8ae88dd8, 0x7aaaf9b0, 0x4cf9aa7e,
             0x1948c25c, 0x02fb8a8c, 0x01c36ae4, 0xd6ebe1f9,
             0x90d4f869, 0xa65cdea0, 0x3f09252d, 0xc208e69f,
-            0xb74e6132, 0xce77e25b, 0x578fdfe3, 0x3ac372e6
-        ]
+            0xb74e6132, 0xce77e25b, 0x578fdfe3, 0x3ac372e6}
+    },
+        {
+            0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344,
+            0xa4093822, 0x299f31d0, 0x082efa98, 0xec4e6c89,
+            0x452821e6, 0x38d01377, 0xbe5466cf, 0x34e90c6c,
+            0xc0ac29b7, 0xc97c50dd, 0x3f84d5b5, 0xb5470917,
+            0x9216d5d9, 0x8979fb1b
+        } };
+
+    *c = initstate;
+}
+
+u_int32_t
+Blowfish_stream2word(const u_int8_t *data, u_int16_t databytes,
+                     u_int16_t *current)
+{
+    u_int8_t i;
+    u_int16_t j;
+    u_int32_t temp;
+
+    temp = 0x00000000;
+    j = *current;
+
+    for (i = 0; i < 4; i++, j++) {
+        if (j >= databytes)
+            j = 0;
+        temp = (temp << 8) | data[j];
     }
+
+    *current = j;
+    return temp;
+}
+
+void
+Blowfish_expand0state(blf_ctx *c, const u_int8_t *key, u_int16_t keybytes)
+{
+    u_int16_t i;
+    u_int16_t j;
+    u_int16_t k;
+    u_int32_t temp;
+    u_int32_t data[2];
+
+    j = 0;
+    for (i = 0; i < BLF_N + 2; i++) {
+        /* Extract 4 int8 to 1 int32 from keystream */
+        temp = Blowfish_stream2word(key, keybytes, &j);
+        c->P[i] = c->P[i] ^ temp;
+    }
+
+    j = 0;
+    data[0] = 0x00000000;
+    data[1] = 0x00000000;
+    for (i = 0; i < BLF_N + 2; i += 2) {
+        Blowfish_encipher(c, data);
+
+        c->P[i] = data[0];
+        c->P[i + 1] = data[1];
+    }
+
+    for (i = 0; i < 4; i++) {
+        for (k = 0; k < 256; k += 2) {
+            Blowfish_encipher(c, data);
+
+            c->S[i][k] = data[0];
+            c->S[i][k + 1] = data[1];
+        }
+    }
+}
+
+
+void
+Blowfish_expandstate(blf_ctx *c, const u_int8_t *data, u_int16_t databytes,
+                     const u_int8_t *key, u_int16_t keybytes)
+{
+    u_int16_t i;
+    u_int16_t j;
+    u_int16_t k;
+    u_int32_t temp;
+    u_int32_t d[2];
+
+    j = 0;
+    for (i = 0; i < BLF_N + 2; i++) {
+        /* Extract 4 int8 to 1 int32 from keystream */
+        temp = Blowfish_stream2word(key, keybytes, &j);
+        c->P[i] = c->P[i] ^ temp;
+    }
+
+    j = 0;
+    d[0] = 0x00000000;
+    d[1] = 0x00000000;
+    for (i = 0; i < BLF_N + 2; i += 2) {
+        d[0] ^= Blowfish_stream2word(data, databytes, &j);
+        d[1] ^= Blowfish_stream2word(data, databytes, &j);
+        Blowfish_encipher(c, d);
+
+        c->P[i] = d[0];
+        c->P[i + 1] = d[1];
+    }
+
+    for (i = 0; i < 4; i++) {
+        for (k = 0; k < 256; k += 2) {
+            d[0]^= Blowfish_stream2word(data, databytes, &j);
+            d[1] ^= Blowfish_stream2word(data, databytes, &j);
+            Blowfish_encipher(c, d);
+
+            c->S[i][k] = d[0];
+            c->S[i][k + 1] = d[1];
+        }
+    }
+
+}
+
+void
+blf_key(blf_ctx *c, const u_int8_t *k, u_int16_t len)
+{
+    /* Initialize S-boxes and subkeys with Pi */
+    Blowfish_initstate(c);
+
+    /* Transform S-boxes and subkeys with key */
+    Blowfish_expand0state(c, k, len);
+}
+
+void
+blf_enc(blf_ctx *c, u_int32_t *data, u_int16_t blocks)
+{
+    u_int32_t *d;
+    u_int16_t i;
+
+    d = data;
+    for (i = 0; i < blocks; i++) {
+        Blowfish_encipher(c, d);
+        d += 2;
+    }
+}
+
+void
+blf_dec(blf_ctx *c, u_int32_t *data, u_int16_t blocks)
+{
+    u_int32_t *d;
+    u_int16_t i;
+
+    d = data;
+    for (i = 0; i < blocks; i++) {
+        Blowfish_decipher(c, d);
+        d += 2;
+    }
+}
+
+void
+blf_ecb_encrypt(blf_ctx *c, u_int8_t *data, u_int32_t len)
+{
+    u_int32_t l, r, d[2];
+    u_int32_t i;
+
+    for (i = 0; i < len; i += 8) {
+        l = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3];
+        r = data[4] << 24 | data[5] << 16 | data[6] << 8 | data[7];
+        d[0] = l;
+        d[1] = r;
+        Blowfish_encipher(c, d);
+        l = d[0];
+        r = d[1];
+        data[0] = l >> 24 & 0xff;
+        data[1] = l >> 16 & 0xff;
+        data[2] = l >> 8 & 0xff;
+        data[3] = l & 0xff;
+        data[4] = r >> 24 & 0xff;
+        data[5] = r >> 16 & 0xff;
+        data[6] = r >> 8 & 0xff;
+        data[7] = r & 0xff;
+        data += 8;
+    }
+}
+
+void
+blf_ecb_decrypt(blf_ctx *c, u_int8_t *data, u_int32_t len)
+{
+    u_int32_t l, r, d[2];
+    u_int32_t i;
+
+    for (i = 0; i < len; i += 8) {
+        l = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3];
+        r = data[4] << 24 | data[5] << 16 | data[6] << 8 | data[7];
+        d[0] = l;
+        d[1] = r;
+        Blowfish_decipher(c, d);
+        l = d[0];
+        r = d[1];
+        data[0] = l >> 24 & 0xff;
+        data[1] = l >> 16 & 0xff;
+        data[2] = l >> 8 & 0xff;
+        data[3] = l & 0xff;
+        data[4] = r >> 24 & 0xff;
+        data[5] = r >> 16 & 0xff;
+        data[6] = r >> 8 & 0xff;
+        data[7] = r & 0xff;
+        data += 8;
+    }
+}
+
+void
+blf_cbc_encrypt(blf_ctx *c, u_int8_t *iv, u_int8_t *data, u_int32_t len)
+{
+    u_int32_t l, r, d[2];
+    u_int32_t i, j;
+
+    for (i = 0; i < len; i += 8) {
+        for (j = 0; j < 8; j++)
+            data[j] ^= iv[j];
+        l = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3];
+        r = data[4] << 24 | data[5] << 16 | data[6] << 8 | data[7];
+        d[0] = l;
+        d[1] = r;
+        Blowfish_encipher(c, d);
+        l = d[0];
+        r = d[1];
+        data[0] = l >> 24 & 0xff;
+        data[1] = l >> 16 & 0xff;
+        data[2] = l >> 8 & 0xff;
+        data[3] = l & 0xff;
+        data[4] = r >> 24 & 0xff;
+        data[5] = r >> 16 & 0xff;
+        data[6] = r >> 8 & 0xff;
+        data[7] = r & 0xff;
+        iv = data;
+        data += 8;
+    }
+}
+
+void
+blf_cbc_decrypt(blf_ctx *c, u_int8_t *iva, u_int8_t *data, u_int32_t len)
+{
+    u_int32_t l, r, d[2];
+    u_int8_t *iv;
+    u_int32_t i, j;
+
+    iv = data + len - 16;
+    data = data + len - 8;
+    for (i = len - 8; i >= 8; i -= 8) {
+        l = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3];
+        r = data[4] << 24 | data[5] << 16 | data[6] << 8 | data[7];
+        d[0] = l;
+        d[1] = r;
+        Blowfish_decipher(c, d);
+        l = d[0];
+        r = d[1];
+        data[0] = l >> 24 & 0xff;
+        data[1] = l >> 16 & 0xff;
+        data[2] = l >> 8 & 0xff;
+        data[3] = l & 0xff;
+        data[4] = r >> 24 & 0xff;
+        data[5] = r >> 16 & 0xff;
+        data[6] = r >> 8 & 0xff;
+        data[7] = r & 0xff;
+        for (j = 0; j < 8; j++)
+            data[j] ^= iv[j];
+        iv -= 8;
+        data -= 8;
+    }
+    l = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3];
+    r = data[4] << 24 | data[5] << 16 | data[6] << 8 | data[7];
+    d[0] = l;
+    d[1] = r;
+    Blowfish_decipher(c, d);
+    l = d[0];
+    r = d[1];
+    data[0] = l >> 24 & 0xff;
+    data[1] = l >> 16 & 0xff;
+    data[2] = l >> 8 & 0xff;
+    data[3] = l & 0xff;
+    data[4] = r >> 24 & 0xff;
+    data[5] = r >> 16 & 0xff;
+    data[6] = r >> 8 & 0xff;
+    data[7] = r & 0xff;
+    for (j = 0; j < 8; j++)
+        data[j] ^= iva[j];
 }

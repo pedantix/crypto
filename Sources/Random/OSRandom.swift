@@ -2,15 +2,12 @@ import Bits
 import Foundation
 import COperatingSystem
 
-/// Uses the operating system's Random function
-/// uses `random` on Linux and `arc4random` on macOS.
-///
-/// [Learn More →](https://docs.vapor.codes/3.0/crypto/random/)
-public final class OSRandom: DataGenerator {
-    /// Create a new OSRandom
+/// Uses the operating system's Random function uses `random` on Linux and `arc4random` on macOS.
+public struct OSRandom: DataGenerator {
+    /// Create a new `OSRandom`
     public init() {}
 
-    /// Get a random array of Bytes
+    /// See `DataGenerator`.
     public func generateData(count: Int) -> Data {
         var bytes = Data()
 

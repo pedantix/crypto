@@ -3,114 +3,15 @@ import Foundation
 
 /// HMAC is a MAC (message authentication code), i.e. a keyed hash function used for message authentication, which is based on a hash function.
 ///
-///    let digest = try HMAC.SHA1.authenticate("hello", key: "vapor")
-///    print(digest.hexEncodedString()) // bb2a9aabb537902647f3f40bfecb679bf0d7d64b
+///     let digest = try HMAC.SHA1.authenticate("hello", key: "vapor")
+///     print(digest.hexEncodedString()) // bb2a9aabb537902647f3f40bfecb679bf0d7d64b
 ///
-/// https://en.wikipedia.org/wiki/HMAC
-/// https://www.openssl.org/docs/man1.0.2/crypto/hmac.html
+/// Read more about [HMAC on Wikipedia](https://en.wikipedia.org/wiki/HMAC).
+///
+/// Read more about OpenSSL's [HMAC methods](https://www.openssl.org/docs/man1.0.2/crypto/hmac.html)
 public final class HMAC {
-    /// The `DigestAlgorithm` (e.g., SHA1, MD5, SHA256) to base the message authentication on.
-    public let algorithm: DigestAlgorithm
+    // MARK: Static
 
-    /// Internal OpenSSL `HMAC_CTX` context.
-    var ctx: HMAC_CTX
-
-    /// Creates a new `HMAC` using the supplied `DigestAlgorithm`.
-    ///
-    /// You can use the convenience static variables on HMAC for common algorithms.
-    ///
-    ///     try HMAC.SHA256.authenticate(...)
-    ///
-    /// You can also use this `init(algorithm:)` method manually to supply custom `DigestAlgorithm`.
-    ///
-    ///     try HMAC(algorithm: .named("sha256")).authenticate(...)
-    ///
-    public init(algorithm: DigestAlgorithm) {
-        self.algorithm = algorithm
-        ctx = HMAC_CTX()
-    }
-
-    /// Authenticates the message using the supplied key. This method will first initialize or reset the HMAC
-    /// context. The supplied message will be digested using one call to `update(data:)`.
-    ///
-    /// For streaming HMAC authentication, use the `reset(key:)`, `update(data:)` and `finish()` methods individually.
-    ///
-    ///    let digest = try HMAC.SHA256.authenticate("hello", key: "vapor")
-    ///    print(digest) /// Data
-    ///
-    /// - parameters:
-    ///     - data: Message to digest / authenticate.
-    ///     - key: HMAC key
-    /// - returns: Digested data
-    /// - throws: `CryptoError` if reset, update, or finalization steps fail or data conversion fails.
-    public func authenticate(_ data: LosslessDataConvertible, key: LosslessDataConvertible) throws -> Data {
-        try reset(key: key)
-        try update(data: data)
-        return try finish()
-    }
-
-    /// Initializes or resets the HMAC context. This method sets this HMAC's key for subsequent calls to `update(data:)`.
-    ///
-    ///     let hmacsha256 = try HMAC(algorithm: .sha256)
-    ///     try hmacsha256.reset(key: "vapor")
-    ///
-    /// - parameters:
-    ///     - key: HMAC key
-    /// - throws: `CryptoError` if the initialization / reset fails or data conversion fails.
-    public func reset(key: LosslessDataConvertible) throws {
-        let key = try key.convertToData()
-        guard HMAC_Init_ex(&ctx, .init(key.withUnsafeBytes { $0 }), Int32(key.count), algorithm.c, nil) == 1 else {
-            throw CryptoError.openssl(identifier: "HMAC_Init_ex", reason: "Failed initializing HMAC context.")
-        }
-    }
-
-    /// Updates the HMAC digest with a new chunk of data. This method can be called repeatedly for each new chunk.
-    /// Use this method for stremaing HMAC digests.
-    ///
-    ///     let hmacsha256 = try HMAC(algorithm: .sha256)
-    ///     try hmacsha256.reset(key: "vapor")
-    ///     try hmacsha256.update(data: "hello")
-    ///     try hmacsha256.update(data: "world")
-    ///
-    /// note: You _must_ call `.reset(key:)` once before streaming data.
-    ///
-    /// - parameters:
-    ///     - data: Message chunk to digest / authenticate
-    /// - throws: `CryptoError` if the update fails or data conversion fails.
-    public func update(data: LosslessDataConvertible) throws {
-        let data = try data.convertToData()
-        guard HMAC_Update(&ctx, .init(data.withUnsafeBytes { $0 }), data.count) == 1 else {
-            throw CryptoError.openssl(identifier: "HMAC_Update", reason: "Failed updating HMAC digest.")
-        }
-    }
-
-    /// Completes the HMAC digest. This method should be called once after one call to `reset(key:)` and one more
-    /// more calls to `update(data:)`.
-    ///
-    ///     let hmacsha256 = try HMAC(algorithm: .sha256)
-    ///     try hmacsha256.reset(key: "vapor")
-    ///     try hmacsha256.update(data: "hello")
-    ///     try hmacsha256.update(data: "world")
-    ///     let digest = try hmacsha256.finish()
-    ///     print(digest) // Data
-    ///
-    /// - returns: Digest data
-    /// - throws: `CryptoError` if the finalization step fails.
-    public func finish() throws -> Data {
-        var hash = Data(repeating: 0, count: Int(EVP_MAX_MD_SIZE))
-        var count: UInt32 = 0
-        guard HMAC_Final(&ctx, hash.withUnsafeMutableBytes { $0 }, &count) == 1 else {
-            throw CryptoError.openssl(identifier: "HMAC_Final", reason: "Failed finalizing HMAC digest.")
-        }
-        return Data(hash[0..<Int(count)])
-    }
-
-    deinit { HMAC_CTX_cleanup(&ctx) }
-}
-
-/// MARK: Implementations
-
-extension HMAC {
     /// MD4 digest based HMAC.
     ///
     /// https://en.wikipedia.org/wiki/MD4
@@ -145,4 +46,111 @@ extension HMAC {
     ///
     /// https://en.wikipedia.org/wiki/SHA-2
     public static var SHA512: HMAC { return .init(algorithm: .sha512) }
+
+    // MARK: Properties
+
+    /// The `DigestAlgorithm` (e.g., SHA1, MD5, SHA256) to base the message authentication on.
+    public let algorithm: DigestAlgorithm
+
+    /// Internal OpenSSL `HMAC_CTX` context.
+    var ctx: HMAC_CTX
+
+    // MARK: Init
+
+    /// Creates a new `HMAC` using the supplied `DigestAlgorithm`.
+    ///
+    /// You can use the convenience static variables on HMAC for common algorithms.
+    ///
+    ///     try HMAC.SHA256.authenticate(...)
+    ///
+    /// You can also use this `init(algorithm:)` method manually to supply custom `DigestAlgorithm`.
+    ///
+    ///     try HMAC(algorithm: .named("sha256")).authenticate(...)
+    ///
+    public init(algorithm: DigestAlgorithm) {
+        self.algorithm = algorithm
+        ctx = HMAC_CTX()
+    }
+
+    // MARK: Methods
+
+    /// Authenticates the message using the supplied key. This method will first initialize or reset the HMAC
+    /// context. The supplied message will be digested using one call to `update(data:)`.
+    ///
+    /// For streaming HMAC authentication, use the `reset(key:)`, `update(data:)` and `finish()` methods individually.
+    ///
+    ///    let digest = try HMAC.SHA256.authenticate("hello", key: "vapor")
+    ///    print(digest) /// Data
+    ///
+    /// - parameters:
+    ///     - data: Message to digest / authenticate.
+    ///     - key: HMAC key
+    /// - returns: Digested data
+    /// - throws: `CryptoError` if reset, update, or finalization steps fail or data conversion fails.
+    public func authenticate(_ data: LosslessDataConvertible, key: LosslessDataConvertible) throws -> Data {
+        try reset(key: key)
+        try update(data: data)
+        return try finish()
+    }
+
+    /// Initializes or resets the HMAC context. This method sets this HMAC's key for subsequent calls to `update(data:)`.
+    ///
+    ///     let hmacsha256 = try HMAC(algorithm: .sha256)
+    ///     try hmacsha256.reset(key: "vapor")
+    ///
+    /// - parameters:
+    ///     - key: HMAC key
+    /// - throws: `CryptoError` if the initialization / reset fails or data conversion fails.
+    public func reset(key: LosslessDataConvertible) throws {
+        let key = key.convertToData()
+        
+        guard key.withByteBuffer({ HMAC_Init_ex(&ctx, $0.baseAddress!, Int32($0.count), algorithm.c, nil) }) == 1 else {
+            throw CryptoError.openssl(identifier: "HMAC_Init_ex", reason: "Failed initializing HMAC context.")
+        }
+    }
+
+    /// Updates the HMAC digest with a new chunk of data. This method can be called repeatedly for each new chunk.
+    /// Use this method for streaming HMAC digests.
+    ///
+    ///     let hmacsha256 = try HMAC(algorithm: .sha256)
+    ///     try hmacsha256.reset(key: "vapor")
+    ///     try hmacsha256.update(data: "hello")
+    ///     try hmacsha256.update(data: "world")
+    ///
+    /// note: You _must_ call `.reset(key:)` once before streaming data.
+    ///
+    /// - parameters:
+    ///     - data: Message chunk to digest / authenticate
+    /// - throws: `CryptoError` if the update fails or data conversion fails.
+    public func update(data: LosslessDataConvertible) throws {
+        let data = data.convertToData()
+
+        guard data.withByteBuffer({ HMAC_Update(&ctx, $0.baseAddress!, $0.count) }) == 1 else {
+            throw CryptoError.openssl(identifier: "HMAC_Update", reason: "Failed updating HMAC digest.")
+        }
+    }
+
+    /// Completes the HMAC digest. This method should be called once after one call to `reset(key:)` and one more
+    /// more calls to `update(data:)`.
+    ///
+    ///     let hmacsha256 = try HMAC(algorithm: .sha256)
+    ///     try hmacsha256.reset(key: "vapor")
+    ///     try hmacsha256.update(data: "hello")
+    ///     try hmacsha256.update(data: "world")
+    ///     let digest = try hmacsha256.finish()
+    ///     print(digest) // Data
+    ///
+    /// - returns: Digest data
+    /// - throws: `CryptoError` if the finalization step fails.
+    public func finish() throws -> Data {
+        var hash = Data(count: Int(EVP_MAX_MD_SIZE))
+        var count: UInt32 = 0
+        
+        guard hash.withMutableByteBuffer({ HMAC_Final(&ctx, $0.baseAddress!, &count) }) == 1 else {
+            throw CryptoError.openssl(identifier: "HMAC_Final", reason: "Failed finalizing HMAC digest.")
+        }
+        return hash.prefix(upTo: Int(count))
+    }
+
+    deinit { HMAC_CTX_cleanup(&ctx) }
 }
